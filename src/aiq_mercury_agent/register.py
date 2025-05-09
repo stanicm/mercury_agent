@@ -66,7 +66,7 @@ async def mercury_agent_workflow(config: MercuryAgentWorkflowConfig, builder: Bu
     router_prompt = """
     Given the user input below, classify it as either being about 'Research', 'Retrieve' or 'General' topic.
     Just use one of these words as your response. \
-    'Research' - any question related to a need to do research on arxiv papers and get a summary. such as "find research papers about RAG for me" or " what is Compound AI?"...etc
+    'Research' - any question requiring factual knowledge on a specific topic from Wikipedia...etc
     'Retrieve' - any question related to the topic of AgentIQ or its workflows, especially concerning the particular workflow called mercury_agent which show case using multiple frameworks such as langchain, llama-index ..etc
     'General' - answering small greeting or chitchat type of questions or everything else that does not fall into any of the above topics.
     User query: {input}
@@ -137,7 +137,7 @@ async def mercury_agent_workflow(config: MercuryAgentWorkflowConfig, builder: Bu
             output = (await chitchat_agent.ainvoke(query))
             logger.info("**using general chitchat chain >>> output:  \n %s, %s", output, Fore.RESET)
         elif 'research' in worker_choice.lower():
-            inputs = {"inputs": query}
+            inputs = {"question": query}
             output = (await research_tool.ainvoke(inputs))
         else:
             output = ("Apologies, I am not sure what to say, I can answer general questions retrieve info this "
