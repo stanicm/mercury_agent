@@ -30,7 +30,7 @@ from aiq.data_models.function import FunctionBaseConfig
 logger = logging.getLogger(__name__)
 
 
-class RAGServerConfig(FunctionBaseConfig, name="llama_index_rag"):
+class RAGServerConfig(FunctionBaseConfig, name="nvbp_rag"):
     model_config = ConfigDict(protected_namespaces=())
 
     base_url: str = "http://0.0.0.0:8081/v1"
@@ -41,7 +41,7 @@ class RAGServerConfig(FunctionBaseConfig, name="llama_index_rag"):
 
 
 @register_function(config_type=RAGServerConfig, framework_wrappers=[LLMFrameworkEnum.LANGCHAIN])
-async def llama_index_rag_tool(tool_config: RAGServerConfig, builder: Builder):
+async def nvbp_rag_tool(tool_config: RAGServerConfig, builder: Builder):
     from colorama import Fore
 
     async def _arun(query: str) -> str:

@@ -20,36 +20,50 @@ general:
 functions:
   internet_search:
     _type: tavily_internet_search
-  llama_index_rag:
-    _type: llama_index_rag
-    llm_name: nim_llm
-    model_name : meta/llama-3.1-405b-instruct
-    embedding_name : nim_embedder
-    data_dir : ./aiq/mercury/README.md
+  nvbp_rag:
+    _type: nvbp_rag
+    base_url: "http://0.0.0.0:8081/v1"
+    collection_name: "SPH"
+    top_k: 3
+    timeout: 120
+    use_knowledge_base: true
   langchain_researcher_tool:
     _type: langchain_researcher_tool
     web_tool: internet_search
     llm_name: nim_llm
   haystack_chitchat_agent:
     _type: haystack_chitchat_agent
-    llm_name: meta/llama-3.1-405b-instruct
+    llm_name: nvdev/nvidia/llama-3.1-nemotron-70b-instruct
+    timeout: 90
+  wikipedia_search:
+    _type: wiki_search
+    llm_name: nim_llm
+    max_results: 3
 
 llms:
   nim_llm:
     _type: nim
-    model_name : meta/llama-3.1-405b-instruct
+    model_name: nvdev/nvidia/llama-3.1-nemotron-70b-instruct
     temperature: 0.0
+    timeout: 180
+  chitchat_llm:
+    _type: nim
+    model_name: nvdev/nvidia/llama-3.1-nemotron-70b-instruct
+    temperature: 0.7
+    max_tokens: 256
+    timeout: 180
 
 embedders:
   nim_embedder:
     _type: nim
-    model_name: nvidia/nv-embedqa-e5-v5
+    model_name: nvdev/nvidia/nv-embedqa-e5-v5
     truncate: END
+    timeout: 180
 
 workflow:
-  _type: aiq_multi_frameworks/multi_frameworks
-  llm : nim_llm
-  data_dir : ./aiq/mercury/README.md
-  rag_tool: llama_index_rag
-  research_tool: langchain_researcher_tool
+  _type: aiq_mercury_agent/mercury_agent
+  llm: nim_llm
+  data_dir: ./mercury/README.md
+  rag_tool: nvbp_rag
+  research_tool: wikipedia_search
   chitchat_agent: haystack_chitchat_agent 

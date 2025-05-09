@@ -24,7 +24,7 @@ from aiq.data_models.function import FunctionBaseConfig
 
 from . import haystack_agent  # noqa: F401, pylint: disable=unused-import
 from . import langchain_research_tool  # noqa: F401, pylint: disable=unused-import
-from . import llama_index_rag_tool  # noqa: F401, pylint: disable=unused-import
+from . import nvbp_rag_tool  # noqa: F401, pylint: disable=unused-import
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ async def mercury_agent_workflow(config: MercuryAgentWorkflowConfig, builder: Bu
     Given the user input below, classify it as either being about 'Research', 'Retrieve' or 'General' topic.
     Just use one of these words as your response. \
     'Research' - any question requiring factual knowledge on a specific topic from Wikipedia...etc
-    'Retrieve' - any question related to the topic of AgentIQ or its workflows, especially concerning the particular workflow called mercury_agent which show case using multiple frameworks such as langchain, llama-index ..etc
+    'Retrieve' - any question related to the topic of SPH (Smoothed Particle Hydrodynamics). This agent is also triggered if the user query explicitly mentioned RAG or the use retrieve..etc
     'General' - answering small greeting or chitchat type of questions or everything else that does not fall into any of the above topics.
     User query: {input}
     Classifcation topic:"""  # noqa: E501
