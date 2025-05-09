@@ -1,3 +1,24 @@
+"""
+This module implements the core registration and workflow logic for the Mercury Agent system.
+It defines the main workflow configuration and orchestrates the interaction between different AI agents.
+
+Key Components:
+1. MercuryAgentWorkflowConfig: Configuration class that defines the workflow parameters
+2. mercury_agent_workflow: Main workflow function that sets up and orchestrates the agent system
+3. Agent State Management: Handles the state transitions between different agents
+4. Router Logic: Directs queries to appropriate specialized agents
+
+Related Components:
+- haystack_agent: Handles general conversation and chitchat
+- langchain_research_tool: Provides research capabilities using LangChain
+- nvbp_rag_tool: Implements RAG (Retrieval Augmented Generation) functionality
+
+The workflow follows a supervisor-worker pattern where:
+1. A supervisor agent classifies incoming queries
+2. A router directs queries to specialized worker agents
+3. Worker agents process queries using their specific capabilities
+"""
+
 # SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -22,6 +43,7 @@ from aiq.data_models.component_ref import FunctionRef
 from aiq.data_models.component_ref import LLMRef
 from aiq.data_models.function import FunctionBaseConfig
 
+# Import related agent modules
 from . import haystack_agent  # noqa: F401, pylint: disable=unused-import
 from . import langchain_research_tool  # noqa: F401, pylint: disable=unused-import
 from . import nvbp_rag_tool  # noqa: F401, pylint: disable=unused-import
@@ -30,7 +52,16 @@ logger = logging.getLogger(__name__)
 
 
 class MercuryAgentWorkflowConfig(FunctionBaseConfig, name="mercury_agent"):
-    # Add your custom configuration parameters here
+    """
+    Configuration class for the Mercury Agent workflow.
+    
+    Attributes:
+        llm: Reference to the LLM to be used (defaults to "nim_llm")
+        data_dir: Directory containing data for RAG operations
+        research_tool: Reference to the research tool function
+        rag_tool: Reference to the RAG tool function
+        chitchat_agent: Reference to the chitchat agent function
+    """
     llm: LLMRef = "nim_llm"
     data_dir: str = "/home/coder/dev/ai-query-engine/aiq/mercury/data/"
     research_tool: FunctionRef
@@ -40,7 +71,20 @@ class MercuryAgentWorkflowConfig(FunctionBaseConfig, name="mercury_agent"):
 
 @register_function(config_type=MercuryAgentWorkflowConfig, framework_wrappers=[LLMFrameworkEnum.LANGCHAIN])
 async def mercury_agent_workflow(config: MercuryAgentWorkflowConfig, builder: Builder):
-    # Implement your workflow logic here
+    """
+    Main workflow function that sets up and orchestrates the Mercury Agent system.
+    
+    This function:
+    1. Initializes the necessary tools and LLM
+    2. Sets up the routing logic
+    3. Defines the state management
+    4. Creates the workflow graph
+    5. Handles the execution of queries
+    
+    Args:
+        config: Configuration object containing workflow parameters
+        builder: Builder object for creating framework-specific components
+    """
     from typing import TypedDict
 
     from colorama import Fore
@@ -53,7 +97,7 @@ async def mercury_agent_workflow(config: MercuryAgentWorkflowConfig, builder: Bu
     from langgraph.graph import END
     from langgraph.graph import StateGraph
 
-    # Use builder to generate framework specific tools and llms
+    # Initialize components using the builder
     logger.info("workflow config = %s", config)
 
     llm = await builder.get_llm(llm_name=config.llm, wrapper_type=LLMFrameworkEnum.LANGCHAIN)
@@ -63,6 +107,7 @@ async def mercury_agent_workflow(config: MercuryAgentWorkflowConfig, builder: Bu
 
     chat_hist = ChatMessageHistory()
 
+    # Define the routing prompt for classifying user queries
     router_prompt = """
     Given the user input below, classify it as either being about 'Research', 'Retrieve' or 'General' topic.
     Just use one of these words as your response. \
@@ -72,6 +117,7 @@ async def mercury_agent_workflow(config: MercuryAgentWorkflowConfig, builder: Bu
     User query: {input}
     Classifcation topic:"""  # noqa: E501
 
+    # Set up the routing chain
     routing_chain = ({
         "input": RunnablePassthrough()
     }
@@ -79,6 +125,7 @@ async def mercury_agent_workflow(config: MercuryAgentWorkflowConfig, builder: Bu
                      | llm
                      | StrOutputParser())
 
+    # Add message history to the routing chain
     supervisor_chain_with_message_history = RunnableWithMessageHistory(
         routing_chain,
         lambda _: chat_hist,
@@ -86,8 +133,14 @@ async def mercury_agent_workflow(config: MercuryAgentWorkflowConfig, builder: Bu
     )
 
     class AgentState(TypedDict):
-        """"
-            Will hold the agent state in between messages
+        """
+        TypedDict defining the state structure for the agent workflow.
+        
+        Attributes:
+            input: The user's input query
+            chat_history: List of previous messages in the conversation
+            chosen_worker_agent: The selected agent for processing the query
+            final_output: The final response generated by the system
         """
         input: str
         chat_history: list[BaseMessage] | None
@@ -95,6 +148,15 @@ async def mercury_agent_workflow(config: MercuryAgentWorkflowConfig, builder: Bu
         final_output: str | None
 
     async def supervisor(state: AgentState):
+        """
+        Supervisor function that classifies incoming queries and determines which agent should handle them.
+        
+        Args:
+            state: Current state of the agent workflow
+            
+        Returns:
+            Updated state with chosen agent and chat history
+        """
         query = state["input"]
         chosen_agent = (await supervisor_chain_with_message_history.ainvoke(
             {"input": query},
@@ -108,9 +170,14 @@ async def mercury_agent_workflow(config: MercuryAgentWorkflowConfig, builder: Bu
 
     async def router(state: AgentState):
         """
-        Route the response to the appropriate handler
+        Router function that determines the next step in the workflow based on the current state.
+        
+        Args:
+            state: Current state of the agent workflow
+            
+        Returns:
+            String indicating the next node in the workflow
         """
-
         status = list(state.keys())
         logger.info("========== inside **router node**  current status = \n %s, %s", Fore.CYAN, status)
         if 'final_output' in status:
@@ -126,6 +193,15 @@ async def mercury_agent_workflow(config: MercuryAgentWorkflowConfig, builder: Bu
         return route_to
 
     async def workers(state: AgentState):
+        """
+        Worker function that processes queries using the appropriate specialized agent.
+        
+        Args:
+            state: Current state of the agent workflow
+            
+        Returns:
+            Updated state with the final output from the chosen agent
+        """
         query = state["input"]
         worker_choice = state["chosen_worker_agent"]
         logger.info("========== inside **workers node**  current status = \n %s, %s", Fore.YELLOW, state)
@@ -146,6 +222,7 @@ async def mercury_agent_workflow(config: MercuryAgentWorkflowConfig, builder: Bu
 
         return {'input': query, "chosen_worker_agent": worker_choice, "chat_history": chat_hist, "final_output": output}
 
+    # Set up the workflow graph
     workflow = StateGraph(AgentState)
     workflow.add_node("supervisor", supervisor)
     workflow.set_entry_point("supervisor")
@@ -162,8 +239,15 @@ async def mercury_agent_workflow(config: MercuryAgentWorkflowConfig, builder: Bu
     app = workflow.compile()
 
     async def _response_fn(input_message: str) -> str:
-        # Process the input_message and generate output
-
+        """
+        Response function that processes input messages and returns the system's response.
+        
+        Args:
+            input_message: The user's input query
+            
+        Returns:
+            The system's response to the query
+        """
         try:
             logger.debug("Starting agent execution")
             out = (await app.ainvoke({"input": input_message, "chat_history": chat_hist}))
